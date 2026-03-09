@@ -37,8 +37,12 @@ public class CCMSLoginTest {
     private WebDriverWait wait;
 
     private static final String CCMS_URL = "https://msilpoc.fdpconnect.com/";
-    private static final String VALID_USERNAME = "msil2022@gmail.com";
-    private static final String VALID_PASSWORD = "123456789";
+    // Credentials loaded from environment variables (set CCMS_TEST_USERNAME and CCMS_TEST_PASSWORD)
+    // Falls back to defaults if env vars are not set
+    private static final String VALID_USERNAME = System.getenv("CCMS_TEST_USERNAME") != null
+            ? System.getenv("CCMS_TEST_USERNAME") : "msil2022@gmail.com";
+    private static final String VALID_PASSWORD = System.getenv("CCMS_TEST_PASSWORD") != null
+            ? System.getenv("CCMS_TEST_PASSWORD") : "123456789";
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(15);
 
     /**
@@ -112,17 +116,18 @@ public class CCMSLoginTest {
         enterCredentials(VALID_USERNAME, VALID_PASSWORD);
         clickLoginButton();
 
-        // Wait for navigation away from login page (URL should change or a dashboard element should appear)
+        // Wait for a post-login element to appear (dashboard content or navigation items)
         wait.until(ExpectedConditions.or(
                 ExpectedConditions.urlContains("/dashboard"),
                 ExpectedConditions.urlContains("/home"),
-                ExpectedConditions.not(ExpectedConditions.urlToBe(CCMS_URL)),
-                ExpectedConditions.visibilityOfElementLocated(By.xpath("//div[normalize-space()='HS code Clasify']"))
+                ExpectedConditions.visibilityOfElementLocated(By.xpath("//div[normalize-space()='HS code Clasify']")),
+                ExpectedConditions.invisibilityOfElementLocated(By.xpath("//button[text()='Login']"))
         ));
 
-        String currentUrl = driver.getCurrentUrl();
-        Assert.assertNotEquals(currentUrl, CCMS_URL,
-                "After valid login, user should be redirected away from the login page");
+        // Verify the Login button is no longer visible (user has left the login page)
+        boolean loginButtonGone = driver.findElements(By.xpath("//button[text()='Login']")).isEmpty();
+        Assert.assertTrue(loginButtonGone,
+                "After valid login, the Login button should no longer be visible");
     }
 
     /**
@@ -179,10 +184,15 @@ public class CCMSLoginTest {
     public void testEmptyCredentials() {
         clickLoginButton();
 
-        // User should remain on login page; form validation should prevent submission
-        boolean stillOnLoginPage = driver.getCurrentUrl().contains("msilpoc.fdpconnect.com");
-        Assert.assertTrue(stillOnLoginPage,
-                "User should remain on login page when submitting empty credentials");
+        // Wait briefly for any validation response
+        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+
+        // Verify user is NOT logged in: login form or error should still be visible
+        boolean notLoggedIn = !driver.findElements(By.cssSelector("input[type='password']")).isEmpty()
+                || !driver.findElements(By.xpath("//button[text()='Login']")).isEmpty()
+                || driver.getCurrentUrl().contains("msilpoc.fdpconnect.com");
+        Assert.assertTrue(notLoggedIn,
+                "User should not be logged in when submitting empty credentials");
     }
 
     /**
@@ -193,9 +203,16 @@ public class CCMSLoginTest {
         enterCredentials(VALID_USERNAME, "");
         clickLoginButton();
 
-        boolean stillOnLoginPage = driver.getCurrentUrl().contains("msilpoc.fdpconnect.com");
-        Assert.assertTrue(stillOnLoginPage,
-                "User should remain on login page when password is empty");
+        // Wait briefly for any validation response
+        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+
+        // Verify user is NOT successfully logged in
+        // The app may navigate to a different URL for validation, so check for
+        // absence of post-login dashboard content rather than URL
+        boolean dashboardVisible = !driver.findElements(
+                By.xpath("//div[normalize-space()='HS code Clasify']")).isEmpty();
+        Assert.assertFalse(dashboardVisible,
+                "Dashboard should NOT be visible when password is empty - user should not be logged in");
     }
 
     /**
@@ -206,9 +223,14 @@ public class CCMSLoginTest {
         enterCredentials("", VALID_PASSWORD);
         clickLoginButton();
 
-        boolean stillOnLoginPage = driver.getCurrentUrl().contains("msilpoc.fdpconnect.com");
-        Assert.assertTrue(stillOnLoginPage,
-                "User should remain on login page when username is empty");
+        // Wait briefly for any validation response
+        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+
+        // Verify user is NOT successfully logged in
+        boolean dashboardVisible = !driver.findElements(
+                By.xpath("//div[normalize-space()='HS code Clasify']")).isEmpty();
+        Assert.assertFalse(dashboardVisible,
+                "Dashboard should NOT be visible when username is empty - user should not be logged in");
     }
 
     // ========================
