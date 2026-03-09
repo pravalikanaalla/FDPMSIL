@@ -1,0 +1,3 @@
+com/ccms/tests/CCMSLoginTest.class
+com/ccms/pages/LoginPage.class
+com/ccms/base/BaseTest.class
